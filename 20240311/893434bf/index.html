@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 7.1.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"weipocheng.github.io","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-906ML4NLTN"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-906ML4NLTN');
+</script>
+
+  <meta name="description" content="前言原本公司內部CI&#x2F;CD的流程是Gitlab &#x3D;&gt; K8s ，或是 Gitlab &#x3D;&gt; Docker 近期由於工作上的需要，需要更改流程為Gitlab &#x3D;&gt; Jenkins &#x3D;&gt; K8s 本篇主要是紀錄Gitlab串接Jenkins，最後透過Jenkins部屬到K8s集群的流程。 事前準備此次測試需要準備一台Jenkins">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Gitlab X Jenkins X Kubernetes">
+<meta property="og:url" content="https://weipocheng.github.io/20240311/893434bf/index.html">
+<meta property="og:site_name" content="Web&#39;s Blog">
+<meta property="og:description" content="前言原本公司內部CI&#x2F;CD的流程是Gitlab &#x3D;&gt; K8s ，或是 Gitlab &#x3D;&gt; Docker 近期由於工作上的需要，需要更改流程為Gitlab &#x3D;&gt; Jenkins &#x3D;&gt; K8s 本篇主要是紀錄Gitlab串接Jenkins，最後透過Jenkins部屬到K8s集群的流程。 事前準備此次測試需要準備一台Jenkins">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E6%96%B0%E5%A2%9E%E4%BD%9C%E6%A5%AD.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E8%A8%AD%E5%AE%9A%E4%BD%9C%E6%A5%AD%E9%A1%9E%E5%9E%8B.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FGitlab-Connection.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E8%A8%AD%E5%AE%9A%E4%BD%9C%E6%A5%AD.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FSecret-Token.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPipeline.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhooks.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhooks-Setting.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FAdd-Webhook.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FAdd-Webhook-Done.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPush-Events.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhook-Success.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPipLine-Running.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fkubeconfig.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fjenkins-kubeconfig.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fkubeconfig-done.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Frun-pipeline.png?alt=media">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fcheck-k8s.png?alt=media">
+<meta property="article:published_time" content="2024-03-11T06:30:06.000Z">
+<meta property="article:modified_time" content="2024-03-12T08:33:35.232Z">
+<meta property="article:author" content="Weipo Cheng">
+<meta property="article:tag" content="kubernetes">
+<meta property="article:tag" content="gitlab">
+<meta property="article:tag" content="CI&#x2F;CD">
+<meta property="article:tag" content="jenkins">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E6%96%B0%E5%A2%9E%E4%BD%9C%E6%A5%AD.png?alt=media">
+
+<link rel="canonical" href="https://weipocheng.github.io/20240311/893434bf/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-TW'
+  };
+</script>
+
+  <title>Gitlab X Jenkins X Kubernetes | Web's Blog</title>
+  
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-906ML4NLTN"></script>
+    <script>
+      if (CONFIG.hostname === location.hostname) {
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-906ML4NLTN');
+      }
+    </script>
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切換導航欄">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Web's Blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">Hello World 👋</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首頁</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>歸檔</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-TW">
+    <link itemprop="mainEntityOfPage" href="https://weipocheng.github.io/20240311/893434bf/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Weipo Cheng">
+      <meta itemprop="description" content="紀錄工作上遇到的問題">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Web's Blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Gitlab X Jenkins X Kubernetes
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">發表於</span>
+
+              <time title="創建時間：2024-03-11 14:30:06" itemprop="dateCreated datePublished" datetime="2024-03-11T14:30:06+08:00">2024-03-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新於</span>
+                <time title="修改時間：2024-03-12 16:33:35" itemprop="dateModified" datetime="2024-03-12T16:33:35+08:00">2024-03-12</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分類於</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/DevOps/" itemprop="url" rel="index"><span itemprop="name">DevOps</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>原本公司內部CI&#x2F;CD的流程是Gitlab &#x3D;&gt; K8s ，或是 Gitlab &#x3D;&gt; Docker</p>
+<p>近期由於工作上的需要，需要更改流程為Gitlab &#x3D;&gt; Jenkins &#x3D;&gt; K8s</p>
+<p>本篇主要是紀錄Gitlab串接Jenkins，最後透過Jenkins部屬到K8s集群的流程。</p>
+<h2 id="事前準備"><a href="#事前準備" class="headerlink" title="事前準備"></a>事前準備</h2><p>此次測試需要準備一台Jenkins Server、一台Gitlab Server、K8s集群以及一個前端專案，前端專案資訊為以下:</p>
+<ul>
+<li>NodeJs 18.19.0</li>
+<li>Vue3 + Nuxt 3</li>
+</ul>
+<h2 id="Jenkins連結Gitlab"><a href="#Jenkins連結Gitlab" class="headerlink" title="Jenkins連結Gitlab"></a>Jenkins連結Gitlab</h2><p>此處可以參考GitLab官方網站的<a target="_blank" rel="external nofollow noopener noreferrer" href="https://docs.gitlab.com/ee/integration/jenkins.html#configure-the-jenkins-server">教學</a><br>這邊就快速帶過</p>
+<h2 id="建立Jenkins作業"><a href="#建立Jenkins作業" class="headerlink" title="建立Jenkins作業"></a>建立Jenkins作業</h2><p>開啟Jenkins網站，選擇左側的”新增作業”</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E6%96%B0%E5%A2%9E%E4%BD%9C%E6%A5%AD.png?alt=media" alt="新增作業"></p>
+<p>輸入作業名稱，選擇作業類型選擇Pipeline，最後點選OK</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E8%A8%AD%E5%AE%9A%E4%BD%9C%E6%A5%AD%E9%A1%9E%E5%9E%8B.png?alt=media" alt="設定作業類型"></p>
+<p>如果在<a href="#Jenkins%E9%80%A3%E7%B5%90Gitlab">上上節</a>有設定成功</p>
+<p>Gitlab Connection的部分應該可以選擇的到gitlab server</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FGitlab-Connection.png?alt=media" alt="Gitlab-Connection"></p>
+<p>Build Triggers的部分只要勾”Build when a change is pushed to GitLab ….”<br>和”Push Events”這兩項，表示當Gitlab的前端專案有Push事件時，就會通知Jenkins做部屬</p>
+<p>這裡的GitLab Webhook URL要記住等等設定Gitlab時會用到</p>
+<p>p.s. 需要事先設定好Jenkins的<strong>Jenkins URL</strong>，否則Gitlab會連不上</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2F%E8%A8%AD%E5%AE%9A%E4%BD%9C%E6%A5%AD.png?alt=media" alt="設定作業"></p>
+<p>再來點選右下角的進階，點選裡面的Generate按鈕，會產生一組Secret token，Jenkins需要透過這組token和Gitlab傳過來的webhook驗證身分，很重要!</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FSecret-Token.png?alt=media" alt="Secret-Token"></p>
+<p>最後Pipeline的部分目前先選擇右方的Hello World模板即可，設定完畢後點選儲存</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPipeline.png?alt=media" alt="Pipeline"></p>
+<h2 id="設定Gitlab-Webhook"><a href="#設定Gitlab-Webhook" class="headerlink" title="設定Gitlab Webhook"></a>設定Gitlab Webhook</h2><p>回到Gitlab的前端專案，點選左側的Settings &#x3D;&gt; Webhooks</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhooks.png?alt=media" alt="Webhooks"></p>
+<p>輸入剛才的GitLab Webhook URL以及Secret token</p>
+<p>Trigger 勾選Push events</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhooks-Setting.png?alt=media" alt="Webhooks-Setting"></p>
+<p>如果Gitlab和Jenkins有HTTPS可以開啟SSL認證，最後點選Add webhook</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FAdd-Webhook.png?alt=media" alt="Add-Webhook"></p>
+<p>會看到與Jenkins連結的Webhook已經建立完成了，現在可以測試webhook是否正常運行</p>
+<p>點選Test按鈕</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FAdd-Webhook-Done.png?alt=media" alt="Add-Webhook-Done"></p>
+<p>再點選Push events</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPush-Events.png?alt=media" alt="Push-Events"></p>
+<p>這裡沒問題的話就會在最底下出現一個狀態為200的Push-Hook Trigger</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FWebhook-Success.png?alt=media" alt="Webhook-Success"></p>
+<p>回去確認Jenkins狀態會看到此時有建置任務在跑了</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2FPipLine-Running.png?alt=media" alt="PipLine-Running"></p>
+<h2 id="安裝K8s-plugins"><a href="#安裝K8s-plugins" class="headerlink" title="安裝K8s plugins"></a>安裝K8s plugins</h2><p>確認Jenkins與Gitlab連線沒問題後</p>
+<p>下一步驟就是要將專案部屬至K8s集群上</p>
+<p>需要安裝的Jenkins plugins為以下:</p>
+<ul>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://plugins.jenkins.io/kubernetes">Kubernetes</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://plugins.jenkins.io/kubernetes-cli">Kubernetes CLI</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://plugins.jenkins.io/kubernetes-client-api">Kubernetes Client API</a></li>
+</ul>
+<h2 id="設定K8s集群憑證"><a href="#設定K8s集群憑證" class="headerlink" title="設定K8s集群憑證"></a>設定K8s集群憑證</h2><p>安裝完成後需要先設定k8s集群的憑證</p>
+<p>這樣才能連入k8s集群內做操作</p>
+<p>至”管理 Jenkins” &#x3D;&gt; “Manage Credentials” &#x3D;&gt; global &#x3D;&gt; Add Credentials</p>
+<p>Kind選擇”Kubernetes configuration(kubeconfig)”</p>
+<p>ID、Description依照自己習慣定義即可</p>
+<p>Kubeconfig選擇 “Enter directly”</p>
+<p>接著到你自己的k8s master server</p>
+<p>複製你的kubeconfig</p>
+<p>我的kubeconfig如下圖所示</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fkubeconfig.png?alt=media" alt="kubeconfig"></p>
+<p>將config檔的內容貼到jenkins上</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fjenkins-kubeconfig.png?alt=media" alt="jenkins-kubeconfig"></p>
+<p>最後選擇OK後，k8s的憑證就設定完成了</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fkubeconfig-done.png?alt=media" alt="kubeconfig-done"></p>
+<h2 id="完成Pipeline"><a href="#完成Pipeline" class="headerlink" title="完成Pipeline"></a>完成Pipeline</h2><p>最後要回到專案的Pipeline設定</p>
+<p>以下是更改後的Pipeline:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">pipeline &#123;</span><br><span class="line">    agent any;</span><br><span class="line">    tools &#123;nodejs &quot;NodeJS 18.19.0&quot;&#125;</span><br><span class="line">    environment &#123;</span><br><span class="line">        // gitlab</span><br><span class="line">        GITLAB_DOMAIN = &#123;your gitlab domain&#125;</span><br><span class="line">        GITLAB_CID = &#123;your gitlab Credentials ID&#125;</span><br><span class="line">        GITLAB_PROJ_PATH = &#123;your gitlab project Path&#125;</span><br><span class="line">        GITLAB_PROJ_NAME = &#123;your gitlab project Name&#125;</span><br><span class="line">        GITLAB_BRANCH = &#123;your gitlab project branch&#125;</span><br><span class="line">        // registry</span><br><span class="line">        HARBOR_REG_URI = &#123;your harbor domain&#125;</span><br><span class="line">        HARBOR_REG_CID = &#123;your harbor Credentials ID&#125;</span><br><span class="line">        HARBOR_REG_PROJ_NAME = &#123;your harbor Project Name&#125;</span><br><span class="line">        HARBOR_REG_DATA_PATH = &quot;$&#123;HARBOR_REG_PROJ_NAME&#125;/$&#123;env.GITLAB_PROJ_PATH&#125;/$&#123;env.GITLAB_PROJ_NAME&#125;/$&#123;env.GITLAB_BRANCH&#125;&quot;</span><br><span class="line">        // k8s</span><br><span class="line">        KUBE_DEPLOYMENT_NAME = &quot;deployment-$&#123;GITLAB_PROJ_NAME&#125;&quot;</span><br><span class="line">        KUBE_DEPLOYMENT_POD_NAME = &quot;pod-$&#123;GITLAB_PROJ_NAME&#125;&quot;</span><br><span class="line">        KUBE_NAMESPACE = &quot;$&#123;GITLAB_PROJ_NAME&#125;-$&#123;GITLAB_BRANCH&#125;&quot;</span><br><span class="line">        KUBE_CID = &#x27;k8s-kubeconfig&#x27;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    stages &#123;</span><br><span class="line">        stage(&#x27;NPM INSTALL &amp;&amp; BUILD&#x27;) &#123;</span><br><span class="line">            steps &#123;</span><br><span class="line">                git url: &quot;https://$&#123;env.GITLAB_DOMAIN&#125;/$&#123;env.GITLAB_PROJ_PATH&#125;/$&#123;env.GITLAB_PROJ_NAME&#125;.git&quot;, branch: &quot;$&#123;env.GITLAB_BRANCH&#125;&quot;, credentialsId: &quot;$&#123;env.GITLAB_CID&#125;&quot;</span><br><span class="line">                sh &quot;npm install&quot;</span><br><span class="line">                sh &quot;npm run generate&quot;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        stage(&#x27;上傳image&#x27;) &#123;</span><br><span class="line">            environment &#123;</span><br><span class="line">                IMAGE_VER = sh(returnStdout: true, script: &#x27;git rev-parse --short HEAD&#x27;)</span><br><span class="line">            &#125;</span><br><span class="line">            steps &#123;</span><br><span class="line">                echo &quot;上傳image 版本 $&#123;env.IMAGE_VER&#125;&quot;</span><br><span class="line">                script &#123;</span><br><span class="line">                    docker.withRegistry(&quot;https://$&#123;env.HARBOR_REG_URI&#125;&quot;, &quot;$&#123;env.HARBOR_REG_CID&#125;&quot;)&#123;</span><br><span class="line">                    	def BuildImage = docker.build(&quot;$&#123;HARBOR_REG_DATA_PATH&#125;&quot;)</span><br><span class="line">                    	BuildImage.push()</span><br><span class="line">                    	BuildImage.push(&quot;$&#123;IMAGE_VER&#125;&quot;)</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        stage(&#x27;建置服務&#x27;) &#123;</span><br><span class="line">            environment &#123;</span><br><span class="line">                IMAGE_VER = sh(returnStdout: true, script: &#x27;git rev-parse --short HEAD&#x27;)</span><br><span class="line">            &#125;</span><br><span class="line">            steps &#123;</span><br><span class="line">                withCredentials([kubeconfigContent(credentialsId: &quot;$&#123;KUBE_CID&#125;&quot;, variable: &#x27;KUBECONFIG_CONTENT&#x27;)]) &#123;</span><br><span class="line">                    sh &#x27;mkdir -p ~/.kube&#x27;</span><br><span class="line">                    sh &#x27;&#x27;&#x27;echo &quot;$KUBECONFIG_CONTENT&quot; &gt; ~/.kube/config&#x27;&#x27;&#x27;</span><br><span class="line">                    sh &quot;kubectl -n $&#123;env.KUBE_NAMESPACE&#125; set image deployment $&#123;env.KUBE_DEPLOYMENT_NAME&#125; $&#123;env.KUBE_DEPLOYMENT_POD_NAME&#125;=$&#123;env.HARBOR_REG_URI&#125;/$&#123;HARBOR_REG_DATA_PATH&#125;:$&#123;env.IMAGE_VER&#125;&quot;</span><br><span class="line">                    script &#123;</span><br><span class="line">                        env.POD_COMPLETE_NAME = sh(returnStdout: true,script: &quot;kubectl get pods -n $&#123;env.KUBE_NAMESPACE&#125; |grep  $&#123;env.KUBE_DEPLOYMENT_NAME&#125; | awk  &#x27;&#123; print \$1 &#125;&#x27;|  tr &#x27;\n&#x27; &#x27; &#x27;&quot;).trim()</span><br><span class="line">                        sh &quot;kubectl -n $&#123;env.KUBE_NAMESPACE&#125; delete pods $&#123;env.POD_COMPLETE_NAME&#125; &quot; </span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>environment的部分用來設定gitlab、harbor以及k8s需要的參數</p>
+<p>舉例來說 GITLAB_DOMAIN 就是你的 Gitlab 域名</p>
+<p>GITLAB_CID 和 HARBOR_REG_CID 就是你用來登入Gitlab或是Harbor的憑證</p>
+<p>詳細的憑證設定可參考官網的這兩篇教學</p>
+<p>此處就不多作介紹</p>
+<ul>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://www.jenkins.io/doc/book/using/using-credentials/">Using credentials</a></li>
+<li><a target="_blank" rel="external nofollow noopener noreferrer" href="https://www.jenkins.io/blog/2021/07/27/git-credentials-binding-phase-1/">Git username &#x2F; password credentials binding</a></li>
+</ul>
+<p>KUBE_DEPLOYMENT_NAME 是你k8s專案的 deployment 名稱<br>KUBE_DEPLOYMENT_POD_NAME 則是pod的名稱</p>
+<p><em>此處CI&#x2F;CD的前提是一開始需要手動跑一次kubectl apply -f deployment.yaml</em></p>
+<p>之後在執行CI&#x2F;CD時，會將舊的image更換成harbor內最新的image</p>
+<p>所以每個專案都需要維護一份自己的k8s yaml檔</p>
+<p>建議可以存在gitlab上方便維護</p>
+<p>這裡有三個stage</p>
+<p>依序是專案打包 &#x3D;&gt; 上傳專案Image &#x3D;&gt; 在k8s集群上建置該服務</p>
+<p>這邊只是大概說明一下這個Pipeline在做甚麼</p>
+<p>更詳細的參數說明可以再GOOGLE</p>
+<p>確認Pipeline沒問題後即可點選儲存</p>
+<h2 id="建置任務"><a href="#建置任務" class="headerlink" title="建置任務"></a>建置任務</h2><p>編輯完Pipeline後，回到JOB頁面</p>
+<p>即可點選左側的馬上建置</p>
+<p>等個幾秒鐘應該就會開始執行</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Frun-pipeline.png?alt=media" alt="run-pipeline"></p>
+<p>等待建置完畢後，查看k8s確認service是否有正確起動後即完成整個CI&#x2F;CD流程👏</p>
+<p><img src="https://firebasestorage.googleapis.com/v0/b/hexo-blog-15ead.appspot.com/o/Jenkins-X-Gitlab-X-K8s%2Fcheck-k8s.png?alt=media" alt="check-k8s"></p>
+<h2 id="結尾"><a href="#結尾" class="headerlink" title="結尾"></a>結尾</h2><p>以上整個流程大致為:</p>
+<p>Gitlab推Code &#x3D;&gt; 觸發jenkins部屬流程 &#x3D;&gt; 執行Pipeline的指令 &#x3D;&gt; 將服務部屬至K8s集群上</p>
+<p>該篇有許多細節沒有講到，例如Gitlab憑證要如何設定至jenkins上</p>
+<p>以及k8s的deployment詳細該怎麼設定等等</p>
+<p>以後如果有空再找時間補起來😫</p>
+<p>目前先請大家自行研究一下🙏</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/kubernetes/" rel="tag"># kubernetes</a>
+              <a href="/tags/gitlab/" rel="tag"># gitlab</a>
+              <a href="/tags/CI-CD/" rel="tag"># CI/CD</a>
+              <a href="/tags/jenkins/" rel="tag"># jenkins</a>
+          </div>
+
+        
+
+
+        
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目錄
+        </li>
+        <li class="sidebar-nav-overview">
+          本站概要
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BA%8B%E5%89%8D%E6%BA%96%E5%82%99"><span class="nav-number">2.</span> <span class="nav-text">事前準備</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Jenkins%E9%80%A3%E7%B5%90Gitlab"><span class="nav-number">3.</span> <span class="nav-text">Jenkins連結Gitlab</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BB%BA%E7%AB%8BJenkins%E4%BD%9C%E6%A5%AD"><span class="nav-number">4.</span> <span class="nav-text">建立Jenkins作業</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%A8%AD%E5%AE%9AGitlab-Webhook"><span class="nav-number">5.</span> <span class="nav-text">設定Gitlab Webhook</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%89%E8%A3%9DK8s-plugins"><span class="nav-number">6.</span> <span class="nav-text">安裝K8s plugins</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%A8%AD%E5%AE%9AK8s%E9%9B%86%E7%BE%A4%E6%86%91%E8%AD%89"><span class="nav-number">7.</span> <span class="nav-text">設定K8s集群憑證</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%8C%E6%88%90Pipeline"><span class="nav-number">8.</span> <span class="nav-text">完成Pipeline</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BB%BA%E7%BD%AE%E4%BB%BB%E5%8B%99"><span class="nav-number">9.</span> <span class="nav-text">建置任務</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%B5%90%E5%B0%BE"><span class="nav-number">10.</span> <span class="nav-text">結尾</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Weipo Cheng</p>
+  <div class="site-description" itemprop="description">紀錄工作上遇到的問題</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">1</span>
+          <span class="site-state-item-name">文章</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">分類</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">標籤</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Weipo Cheng</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="external nofollow noopener noreferrer" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="external nofollow noopener noreferrer" target="_blank">NexT.Gemini</a> 強力驅動
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
